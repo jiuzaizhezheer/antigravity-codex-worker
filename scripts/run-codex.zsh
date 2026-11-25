@@ -178,6 +178,7 @@ fi
 SPEC_FILE="${SPEC_FILE:A}"
 SUMMARY_FILE="${SUMMARY_FILE:A}"
 SESSION_FILE="$SUMMARY_FILE.session-id"
+WORKTREE_FILE="$SUMMARY_FILE.worktree"
 
 if [[ -n "$WORK_DIR" ]]; then
   WORK_DIR="${WORK_DIR:A}"
@@ -190,8 +191,8 @@ if [[ ! -s "$SPEC_FILE" ]]; then
   echo "[CODEX-WORKER] Spec file missing or empty: $SPEC_FILE" >&2
   exit 2
 fi
-if [[ "$SPEC_FILE" == "$SUMMARY_FILE" || "$SPEC_FILE" == "$SESSION_FILE" ]]; then
-  echo "[CODEX-WORKER] The spec must be separate from the summary and session ID files." >&2
+if [[ "$SPEC_FILE" == "$SUMMARY_FILE" || "$SPEC_FILE" == "$SESSION_FILE" || "$SPEC_FILE" == "$WORKTREE_FILE" ]]; then
+  echo "[CODEX-WORKER] The spec must be separate from the summary, session ID, and worktree files." >&2
   exit 2
 fi
 
@@ -218,7 +219,7 @@ done
 ADD_DIRS=("${NORMALIZED_ADD_DIRS[@]}")
 
 mkdir -p "${SUMMARY_FILE:h}"
-rm -f "$SUMMARY_FILE" "$SESSION_FILE"
+rm -f "$SUMMARY_FILE" "$SESSION_FILE" "$WORKTREE_FILE"
 
 if [[ -n "$WORK_DIR" ]] && EXCLUDE_FILE="$(git -C "$WORK_DIR" rev-parse --git-path info/exclude 2>/dev/null)"; then
   if [[ "$EXCLUDE_FILE" != /* ]]; then
@@ -290,6 +291,17 @@ echo "[CODEX-WORKER] Spec    : $SPEC_FILE"
 echo "[CODEX-WORKER] Summary : $SUMMARY_FILE"
 echo "------------------------------------------------------------"
 
+list_worktree_paths() {
+  git -C "$1" worktree list --porcelain 2>/dev/null | awk '/^worktree / { print substr($0, 10) }'
+}
+
+BEFORE_WORKTREES=()
+if [[ "$WORKTREE" -eq 1 && -n "$WORK_DIR" ]]; then
+  while IFS= read -r wt; do
+    [[ -n "$wt" ]] && BEFORE_WORKTREES+=("$wt")
+  done < <(list_worktree_paths "$WORK_DIR")
+fi
+
 exit_code=0
 if [[ "$EPHEMERAL" -eq 0 ]]; then
   RUN_LOG="$(mktemp "${TMPDIR:-/tmp}/codex-worker.XXXXXX")"
@@ -322,6 +334,27 @@ else
     "$CODEX_BIN" "${ARGS[@]}" < "$SPEC_FILE"
   ) || exit_code=$?
   echo "------------------------------------------------------------"
+fi
+
+if [[ "$WORKTREE" -eq 1 && -n "$WORK_DIR" ]]; then
+  AFTER_WORKTREES=()
+  while IFS= read -r wt; do
+    [[ -n "$wt" ]] && AFTER_WORKTREES+=("$wt")
+  done < <(list_worktree_paths "$WORK_DIR")
+  NEW_WORKTREES=()
+  for wt in "${AFTER_WORKTREES[@]}"; do
+    if (( ${BEFORE_WORKTREES[(Ie)$wt]} == 0 )); then
+      NEW_WORKTREES+=("$wt")
+    fi
+  done
+  if [[ "${#NEW_WORKTREES[@]}" -eq 1 ]]; then
+    print -r -- "${NEW_WORKTREES[1]}" > "$WORKTREE_FILE"
+    echo "[CODEX-WORKER] Worktree : ${NEW_WORKTREES[1]}"
+  elif [[ "${#NEW_WORKTREES[@]}" -gt 1 ]]; then
+    echo "[CODEX-WORKER] Multiple new worktrees detected; verify target checkout with git worktree list --porcelain." >&2
+  elif [[ "$exit_code" -eq 0 ]]; then
+    echo "[CODEX-WORKER] No new worktree detected; inspect git worktree list --porcelain if needed." >&2
+  fi
 fi
 
 if [[ "$exit_code" -ne 0 ]]; then
