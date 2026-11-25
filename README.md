@@ -46,17 +46,17 @@ Antigravity (Gemini / Opus)           Workspace (.codex-tasks/)           OpenAI
 #### Option A: Global Install (Recommended — available in all projects)
 ```powershell
 # Windows (PowerShell)
-git clone https://github.com/lbc9168/antigravity-codex-worker.git "$HOME\.gemini\config\skills\codex-worker"
+git clone https://github.com/jiuzaizhezheer/antigravity-codex-worker.git "$HOME\.gemini\config\skills\codex-worker"
 ```
 ```bash
 # macOS / Linux
-git clone https://github.com/lbc9168/antigravity-codex-worker.git ~/.gemini/config/skills/codex-worker
+git clone https://github.com/jiuzaizhezheer/antigravity-codex-worker.git ~/.gemini/config/skills/codex-worker
 chmod +x ~/.gemini/config/skills/codex-worker/scripts/run-codex.sh
 ```
 
 #### Option B: Workspace-Only Install
 ```bash
-git clone https://github.com/lbc9168/antigravity-codex-worker.git .agents/skills/codex-worker
+git clone https://github.com/jiuzaizhezheer/antigravity-codex-worker.git .agents/skills/codex-worker
 ```
 
 ### Usage Examples
@@ -80,11 +80,11 @@ Start a new conversation in Antigravity and prompt naturally:
 ### 快速安装（全局生效）
 ```powershell
 # Windows PowerShell
-git clone https://github.com/lbc9168/antigravity-codex-worker.git "$HOME\.gemini\config\skills\codex-worker"
+git clone https://github.com/jiuzaizhezheer/antigravity-codex-worker.git "$HOME\.gemini\config\skills\codex-worker"
 ```
 ```bash
 # macOS / Linux
-git clone https://github.com/lbc9168/antigravity-codex-worker.git ~/.gemini/config/skills/codex-worker
+git clone https://github.com/jiuzaizhezheer/antigravity-codex-worker.git ~/.gemini/config/skills/codex-worker
 chmod +x ~/.gemini/config/skills/codex-worker/scripts/run-codex.sh
 ```
 
@@ -111,4 +111,6 @@ codex-worker/
 ```
 
 ## Credits
- Delegation lifecycle inspired by [khanhbkqt/spawn-agent](https://github.com/khanhbkqt/spawn-agent), redesigned natively for Google Antigravity + modern `codex exec` workflows.
+- Maintained as an independent derivative by [jiuzaizhezheer](https://github.com/jiuzaizhezheer).
+- Derived from [lbc9168/antigravity-codex-worker](https://github.com/lbc9168/antigravity-codex-worker) by Bingcai Liu (MIT License).
+- Delegation lifecycle originally inspired by [khanhbkqt/spawn-agent](https://github.com/khanhbkqt/spawn-agent).
