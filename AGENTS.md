@@ -6,6 +6,7 @@ These rules apply when modifying or iterating on `antigravity-codex-worker` itse
 - Every commit made during iterations on this repository itself must include an attribution trailer identifying the agent and model in the format `AgentName-ModelName` (using human-readable names):
   - `Co-authored-by: AgentName-ModelName <noreply@example.com>`
   - Example: `Co-authored-by: Antigravity-Gemini 4 Neon <noreply@antigravity.google>`
+  - Example: `Co-authored-by: Codex-GPT 6.2 Astra <noreply@openai.com>`
 
 ## Repository Conventions
 - **Language**: Write all repository files, documentation, comments, and templates in concise, precise English.
