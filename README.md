@@ -8,11 +8,11 @@
 
 `antigravity-codex-worker` enforces a strict **Architect + Worker + Reviewer** separation using native Antigravity Agent Skills and `codex exec` headless mode:
 
-1. **DEFINE** — Antigravity inspects the codebase and resolves architectural decisions, interfaces, and edge cases upfront.
+1. **DEFINE** — Antigravity identifies the entry points, required interfaces, and observable acceptance criteria.
 2. **COMPOSE** — Antigravity writes a structured specification file (`.codex-tasks/<task-id>-spec.md`) from scoped task templates.
 3. **SPAWN** — [scripts/run-codex.zsh](./scripts/run-codex.zsh) pipes the specification via `stdin` into `codex exec --sandbox <mode>` and captures the final report via `--output-last-message`.
-4. **REVIEW** — Antigravity independently inspects `git status --short`, line-by-line `git diff`, and runs tests/linters/typecheckers itself rather than trusting the worker's summary.
-5. **VERDICT** — Approves changes in the working tree or dispatches up to 2 targeted rework rounds using `--session-id` (or `--resume-last` fallback).
+4. **REVIEW** — Antigravity inspects the diff and runs the acceptance checks in the worker's actual checkout. The launcher reports failure if Codex exits unsuccessfully or the final summary is missing or empty.
+5. **VERDICT** — Approves changes in the working tree or dispatches up to 2 targeted rework rounds using the task's saved session ID.
 
 ```text
 Antigravity (Gemini / Opus)           Workspace (.codex-tasks/)           OpenAI Codex CLI
@@ -28,16 +28,16 @@ Antigravity (Gemini / Opus)           Workspace (.codex-tasks/)           OpenAI
 ```
 
 ### Key Features
-- **macOS-Native `zsh` Launcher**: Pure `SKILL.md` + `zsh` wrapper over official `codex exec` with zero external runtime dependencies. Resolves `codex` from `PATH`, `/opt/homebrew/bin/codex`, or `/usr/local/bin/codex`, and normalizes all paths to absolute paths before changing directories.
+- **macOS-Native `zsh` Launcher**: Resolves `codex` from `PATH`, `/opt/homebrew/bin/codex`, or `/usr/local/bin/codex`, and normalizes file paths before changing directories.
 - **File-Contract `stdin` Handoff**: Specs in `.codex-tasks/<task-id>-spec.md` are streamed via `stdin` to avoid shell quoting and argument-length issues. Templates forbid `git commit`, `git push`, `git reset --hard`, and `git checkout --`, keeping all edits unstaged for review.
-- **Session-ID-Targeted Rework**: Captures `session id` from Codex execution output and prints `[CODEX-WORKER] Session : <id>` so rework rounds resume the exact session via `--session-id` without cross-session collisions (with `--resume-last` retained as fallback).
+- **Session-ID-Targeted Rework**: Reads `thread_id` from the `thread.started` JSONL event and saves it in `<summary-file>.session-id` for persistent runs. Automatic rework uses this ID and inherits the saved workspace and sandbox. A missing ID disables automatic rework.
 - **Worktree-Safe Git Hygiene**: Uses `git rev-parse --git-path info/exclude` to register `.codex-tasks/` cleanly across standard repositories, subdirectories, submodules, and `git worktree` checkouts without modifying tracked `.gitignore` files.
-- **Per-Task Execution Controls**: Supports per-invocation overrides for `--model`, `--reasoning-effort`, `--add-dir`, and `--worktree` without mutating `~/.codex/config.toml`. Non-resumed `--sandbox read-only` runs automatically enable `--ephemeral` to avoid cluttering saved session history.
+- **Per-Task Execution Controls**: Supports per-invocation overrides for `--model`, `--reasoning-effort`, `--add-dir`, and `--worktree` without mutating `~/.codex/config.toml`. Use `--ephemeral` for one-off tasks.
 
 ---
 
 ## Prerequisites
-- macOS with `zsh`
+- macOS with `zsh` and `jq`
 - [Google Antigravity](https://antigravity.google/)
 - [OpenAI Codex](https://github.com/openai/codex) CLI installed and authenticated (`codex login` or via the Codex desktop app)
 - Target workspace initialized with `git` (and at least one baseline commit for `git diff` review, unless `--skip-git-check` is used)
@@ -75,15 +75,15 @@ Start a conversation in Antigravity and prompt naturally:
 | :--- | :--- |
 | `--spec-file <path>` | **Required.** Task specification markdown file piped to `codex` via `stdin`. |
 | `--summary-file <path>` | **Required.** Output file path passed to `--output-last-message` (`-o`). |
-| `--work-dir <dir>` | Target workspace root (defaults to current working directory). |
-| `--sandbox <mode>` | Sandbox policy: `read-only`, `workspace-write` (default), or `danger-full-access`. |
+| `--work-dir <dir>` | Defaults to the current directory for new runs and the saved directory on resume. |
+| `--sandbox <mode>` | `read-only`, `workspace-write`, or `danger-full-access`. Defaults to `workspace-write` for new runs and the saved policy on resume. |
 | `--model <slug>` | Override the Codex model for this invocation. |
 | `--reasoning-effort <level>` | Override `model_reasoning_effort`: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. |
 | `--session-id <id>` | Resume a specific Codex session by ID (mutually exclusive with `--resume-last`). |
 | `--resume-last` | Resume the most recent Codex session recorded for `--work-dir`. |
 | `--add-dir <dir>` | Grant writable access to an additional directory alongside `--work-dir` (repeatable). |
-| `--worktree` | Execute inside a new managed Git worktree. |
-| `--ephemeral` | Do not persist session files to disk (auto-enabled for non-resumed `--sandbox read-only`). |
+| `--worktree` | Start a new persistent session in a managed Git worktree. Incompatible with resume and `--ephemeral`. |
+| `--ephemeral` | Skip session persistence for this run. Available for both read-only and writable tasks. |
 | `--skip-git-check` | Allow execution outside a Git repository. |
 | `--image <file>` | Attach an image file to the prompt (repeatable). |
 | `-h`, `--help` | Print CLI usage and exit. |

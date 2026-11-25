@@ -10,9 +10,9 @@ Required:
   --summary-file <path>       Output path for Codex final message (-o)
 
 Options:
-  --work-dir <dir>            Workspace directory (default: current directory)
+  --work-dir <dir>            Workspace directory (new run: current; resume: saved)
   --sandbox <mode>            read-only | workspace-write | danger-full-access
-                              (default: workspace-write)
+                              (new run: workspace-write; resume: saved)
   --model <slug>              Override Codex model for this run
   --reasoning-effort <level>  minimal | low | medium | high | xhigh | max | ultra
   --session-id <id>           Resume a specific Codex session by ID
@@ -20,8 +20,8 @@ Options:
   --skip-git-check            Allow running outside a Git repository
   --image <file>              Attach image file to prompt (repeatable)
   --add-dir <dir>             Grant writable access to extra directory (repeatable)
-  --worktree                  Run Codex in a new managed Git worktree
-  --ephemeral                 Do not persist session files (auto-enabled for read-only)
+  --worktree                  Start a persistent new session in a managed Git worktree
+  --ephemeral                 Do not persist this run for follow-up
   -h, --help                  Show this help message and exit
 EOF
 }
@@ -35,8 +35,8 @@ require_arg() {
 
 SPEC_FILE=""
 SUMMARY_FILE=""
-WORK_DIR="$PWD"
-SANDBOX="workspace-write"
+WORK_DIR=""
+SANDBOX=""
 MODEL=""
 REASONING_EFFORT=""
 SESSION_ID=""
@@ -127,7 +127,7 @@ if [[ -z "$SPEC_FILE" || -z "$SUMMARY_FILE" ]]; then
 fi
 
 case "$SANDBOX" in
-  read-only|workspace-write|danger-full-access) ;;
+  ""|read-only|workspace-write|danger-full-access) ;;
   *)
     echo "[CODEX-WORKER] Invalid --sandbox mode: $SANDBOX (expected: read-only, workspace-write, danger-full-access)" >&2
     exit 2
@@ -149,8 +149,13 @@ if [[ -n "$SESSION_ID" && "$RESUME_LAST" -eq 1 ]]; then
   exit 2
 fi
 
-if [[ "$SANDBOX" == "read-only" && -z "$SESSION_ID" && "$RESUME_LAST" -eq 0 ]]; then
-  EPHEMERAL=1
+if [[ "$WORKTREE" -eq 1 && ( -n "$SESSION_ID" || "$RESUME_LAST" -eq 1 || "$EPHEMERAL" -eq 1 ) ]]; then
+  echo "[CODEX-WORKER] --worktree requires a new, persistent session." >&2
+  exit 2
+fi
+if [[ -z "$SESSION_ID" && "$RESUME_LAST" -eq 0 ]]; then
+  WORK_DIR="${WORK_DIR:-$PWD}"
+  SANDBOX="${SANDBOX:-workspace-write}"
 fi
 
 CODEX_BIN=""
@@ -165,16 +170,28 @@ else
   exit 127
 fi
 
-WORK_DIR="${WORK_DIR:A}"
+if [[ "$EPHEMERAL" -eq 0 ]] && ! command -v jq >/dev/null 2>&1; then
+  echo "[CODEX-WORKER] jq is required to read Codex JSON events." >&2
+  exit 127
+fi
+
 SPEC_FILE="${SPEC_FILE:A}"
 SUMMARY_FILE="${SUMMARY_FILE:A}"
+SESSION_FILE="$SUMMARY_FILE.session-id"
 
-if [[ ! -d "$WORK_DIR" ]]; then
+if [[ -n "$WORK_DIR" ]]; then
+  WORK_DIR="${WORK_DIR:A}"
+fi
+if [[ -n "$WORK_DIR" && ! -d "$WORK_DIR" ]]; then
   echo "[CODEX-WORKER] Work directory does not exist: $WORK_DIR" >&2
   exit 2
 fi
 if [[ ! -s "$SPEC_FILE" ]]; then
   echo "[CODEX-WORKER] Spec file missing or empty: $SPEC_FILE" >&2
+  exit 2
+fi
+if [[ "$SPEC_FILE" == "$SUMMARY_FILE" || "$SPEC_FILE" == "$SESSION_FILE" ]]; then
+  echo "[CODEX-WORKER] The spec must be separate from the summary and session ID files." >&2
   exit 2
 fi
 
@@ -201,10 +218,9 @@ done
 ADD_DIRS=("${NORMALIZED_ADD_DIRS[@]}")
 
 mkdir -p "${SUMMARY_FILE:h}"
-rm -f "$SUMMARY_FILE"
+rm -f "$SUMMARY_FILE" "$SESSION_FILE"
 
-EXCLUDE_FILE="$(git -C "$WORK_DIR" rev-parse --git-path info/exclude 2>/dev/null || true)"
-if [[ -n "$EXCLUDE_FILE" ]]; then
+if [[ -n "$WORK_DIR" ]] && EXCLUDE_FILE="$(git -C "$WORK_DIR" rev-parse --git-path info/exclude 2>/dev/null)"; then
   if [[ "$EXCLUDE_FILE" != /* ]]; then
     EXCLUDE_FILE="$WORK_DIR/$EXCLUDE_FILE"
   fi
@@ -215,7 +231,13 @@ if [[ -n "$EXCLUDE_FILE" ]]; then
   fi
 fi
 
-ARGS=("exec" "--cd" "$WORK_DIR" "--sandbox" "$SANDBOX" "--color" "never")
+ARGS=("exec" "--color" "never")
+if [[ -n "$WORK_DIR" ]]; then
+  ARGS+=("--cd" "$WORK_DIR")
+fi
+if [[ -n "$SANDBOX" ]]; then
+  ARGS+=("--sandbox" "$SANDBOX")
+fi
 for dir in "${ADD_DIRS[@]}"; do
   ARGS+=("--add-dir" "$dir")
 done
@@ -245,7 +267,7 @@ for img in "${IMAGES[@]}"; do
   ARGS+=("--image" "$img")
 done
 
-ARGS+=("--output-last-message" "$SUMMARY_FILE")
+ARGS+=("--json" "--output-last-message" "$SUMMARY_FILE")
 if [[ -n "$SESSION_ID" ]]; then
   ARGS+=("$SESSION_ID")
 fi
@@ -259,8 +281,8 @@ elif [[ "$RESUME_LAST" -eq 1 ]]; then
 fi
 
 echo "[CODEX-WORKER] Binary  : $CODEX_BIN"
-echo "[CODEX-WORKER] WorkDir : $WORK_DIR"
-echo "[CODEX-WORKER] Sandbox : $SANDBOX | Resume: $RESUME_DESC | Model: ${MODEL:-(default)} | Effort: ${REASONING_EFFORT:-(default)} | Ephemeral: $EPHEMERAL | Worktree: $WORKTREE"
+echo "[CODEX-WORKER] WorkDir : ${WORK_DIR:-(saved)}"
+echo "[CODEX-WORKER] Sandbox : ${SANDBOX:-(saved)} | Resume: $RESUME_DESC | Model: ${MODEL:-(default)} | Effort: ${REASONING_EFFORT:-(default)} | Ephemeral: $EPHEMERAL | Worktree: $WORKTREE"
 echo "[CODEX-WORKER] Spec    : $SPEC_FILE"
 echo "[CODEX-WORKER] Summary : $SUMMARY_FILE"
 echo "------------------------------------------------------------"
@@ -270,25 +292,28 @@ trap 'rm -f "$RUN_LOG"' EXIT
 
 exit_code=0
 (
-  cd "$WORK_DIR"
+  cd "${WORK_DIR:-$PWD}" || exit 1
   "$CODEX_BIN" "${ARGS[@]}" < "$SPEC_FILE"
-) 2>&1 | tee "$RUN_LOG" || exit_code=${pipestatus[1]}
-
-DETECTED_SESSION_ID="$(awk -F':[[:space:]]*' 'tolower($1) ~ /^[[:space:]]*session id$/ { gsub(/[[:space:]]+$/, "", $2); print $2; exit }' "$RUN_LOG" || true)"
+) | tee "$RUN_LOG" || {
+  run_status=("${pipestatus[@]}")
+  exit_code=$(( run_status[1] ? run_status[1] : run_status[2] ))
+}
 
 echo "------------------------------------------------------------"
-if [[ -n "$DETECTED_SESSION_ID" ]]; then
-  echo "[CODEX-WORKER] Session : $DETECTED_SESSION_ID"
+if [[ "$EPHEMERAL" -eq 0 ]]; then
+  if DETECTED_SESSION_ID="$(jq -ner 'first(inputs | select(.type == "thread.started") | .thread_id | strings | select(length > 0))' "$RUN_LOG")"; then
+    print -r -- "$DETECTED_SESSION_ID" > "$SESSION_FILE"
+    echo "[CODEX-WORKER] Session : $DETECTED_SESSION_ID"
+  else
+    echo "[CODEX-WORKER] No session ID received. Automatic rework is unavailable." >&2
+  fi
 fi
-
 if [[ "$exit_code" -ne 0 ]]; then
-  echo "[CODEX-WORKER] Codex exited with non-zero code: $exit_code" >&2
+  echo "[CODEX-WORKER] Run failed with exit code: $exit_code" >&2
   exit "$exit_code"
 fi
-
-if [[ ! -f "$SUMMARY_FILE" ]]; then
-  echo "[CODEX-WORKER] Warning: Codex exited 0, but summary file was not created at: $SUMMARY_FILE" >&2
-else
-  echo "[CODEX-WORKER] Completed successfully. Final summary saved to: $SUMMARY_FILE"
+if [[ ! -f "$SUMMARY_FILE" ]] || ! grep -q '[^[:space:]]' "$SUMMARY_FILE"; then
+  echo "[CODEX-WORKER] Missing or empty final summary: $SUMMARY_FILE" >&2
+  exit 1
 fi
-exit 0
+echo "[CODEX-WORKER] Completed successfully. Final summary saved to: $SUMMARY_FILE"

@@ -33,7 +33,7 @@ When this skill is active, operate strictly in an **Architect + Worker + Reviewe
 
 ### Stage 1: DEFINE (Research & Architecture)
 1. Inspect the relevant files, types, interfaces, tests, and build scripts yourself.
-2. Make all architectural and design decisions upfront (data structures, function signatures, file layout, edge cases). Do not leave architectural ambiguity for Codex to guess.
+2. Specify the observable outcome, entry points, compatibility requirements, and acceptance checks. Record any mandated design decisions. Let Codex choose implementation details using the target project's conventions.
 3. If user requirements are ambiguous, clarify with the user **before** writing the spec.
 
 ### Stage 2: COMPOSE (Write Task Specification)
@@ -55,29 +55,30 @@ Resolve `<skill-dir>` as the directory containing this `SKILL.md` file, then inv
 # Implementation or Bugfix:
 zsh "<skill-dir>/scripts/run-codex.zsh" --work-dir "<workspace-abs-path>" --spec-file "<workspace-abs-path>/.codex-tasks/<task-id>-spec.md" --summary-file "<workspace-abs-path>/.codex-tasks/<task-id>-summary.md" --sandbox workspace-write
 
-# Read-only Research / Audit (automatically enables --ephemeral):
+# Read-only research with the option to follow up:
 zsh "<skill-dir>/scripts/run-codex.zsh" --work-dir "<workspace-abs-path>" --spec-file "<workspace-abs-path>/.codex-tasks/<task-id>-spec.md" --summary-file "<workspace-abs-path>/.codex-tasks/<task-id>-summary.md" --sandbox read-only
 ```
 
 Optional flags supported by `run-codex.zsh`:
 - `--model "<model-slug>"`: Overrides Codex's default model for this run. Only set when the user asks for a specific model; omit otherwise to use `~/.codex/config.toml` default.
 - `--reasoning-effort "<level>"`: Overrides Codex's thinking effort (`minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`) via `-c model_reasoning_effort=...`. Set when the user requests a specific thinking intensity; omit otherwise to use `~/.codex/config.toml` default.
-- `--session-id "<id>"`: Resumes a specific Codex session by ID (preferred for Stage 5 rework using the `[CODEX-WORKER] Session : <id>` line printed in Stage 3).
-- `--resume-last`: Resumes the most recent Codex session in `--work-dir` (fallback if no session ID was captured; do not combine with `--session-id`).
+- `--session-id "<id>"`: Resumes that task's saved directory, workspace roots, and sandbox. Pass `--work-dir` or `--sandbox` on resume only for an intentional override.
+- `--resume-last`: Selects the most recent session for the current or specified directory. Use only when explicitly requested.
 - `--add-dir "<dir>"`: Grants writable access to an additional directory alongside `--work-dir` (repeatable).
-- `--worktree`: Runs Codex in a new managed Git worktree (useful when `--work-dir` has pre-existing uncommitted edits).
-- `--ephemeral`: Runs without persisting session files to disk (automatically enabled when `--sandbox read-only` is used without `--session-id`/`--resume-last`).
+- `--worktree`: Starts a new persistent session in a managed Git worktree. Omit it on resume.
+- `--ephemeral`: Opts into a one-off run when follow-up is unnecessary. It is incompatible with `--worktree`.
 - `--skip-git-check`: Allows execution outside a Git repository when explicitly requested.
 - `--image "<file-path>"`: Attaches reference screenshot/mockup file(s) to the prompt (repeatable).
 
 ### Stage 4: REVIEW (Strict Independent Acceptance)
 **Never trust Codex's summary at face value.** Perform all three checks yourself:
 
-1. **Read Worker Summary**: Read `<workspace>/.codex-tasks/<task-id>-summary.md` to understand Codex's claimed changes, test runs, and caveats.
+1. **Read Worker Summary**: Check the launcher exit code, then read the summary for the working directory, changes, and checks that passed, failed, or could not run. A nonzero exit requires investigation before acceptance.
 2. **Inspect Actual Diffs**:
+   - Run all review commands and tests in the worker's checkout. For `--worktree`, match the directory reported by the worker to an entry in `git worktree list --porcelain` before reviewing the diff.
    - Run `git status --short` (check for untracked files or unexpected deletions, accounting for any Pre-Flight baseline changes).
    - Run `git diff` (and read new untracked files with `read_file`) to review every changed line against your Stage 2 spec:
-     - Did Codex follow the exact architecture and interfaces?
+     - Does the change satisfy the acceptance criteria and preserve the required interfaces?
      - Did it touch any forbidden files?
      - Are error handling, types, security, and edge cases properly handled?
 3. **Run Independent Verification**: Run the project's test suite, typechecker, or linter yourself to confirm everything passes cleanly.
@@ -85,7 +86,7 @@ Optional flags supported by `run-codex.zsh`:
 ### Stage 5: VERDICT (Approve or Rework)
 - **If Review Fails**:
   1. Write concrete, actionable feedback (exact file paths, line numbers, design deviations, or compiler/test error output) to `<workspace>/.codex-tasks/<task-id>-rework-1.md`.
-  2. Dispatch rework by re-running `run-codex.zsh` with `--session-id "<id>"` (from `[CODEX-WORKER] Session : <id>` in Stage 3 output, or `--resume-last` as fallback if no session ID was printed), pointing `--spec-file` to the rework file and `--summary-file` to `<task-id>-rework-1-summary.md`.
+  2. Read the ID from the original task's `<summary-file>.session-id` and pass it to `--session-id`. Supply the rework spec and a new summary path. Omit `--work-dir`, `--sandbox`, and `--worktree` to reuse the original environment. If the ID is unavailable, report the failed checks and stop automatic rework.
   3. Repeat Stage 4 review. Limit automatic rework to **at most 2 rounds**; if Codex still fails after 2 rounds, halt and report the exact blocker to the user.
 - **If Review Passes**:
   Report concisely to the user:

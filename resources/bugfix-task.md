@@ -18,8 +18,7 @@
 
 ## 3. Fix Plan
 1. Confirm the root cause in code (if the actual root cause differs from the hypothesis above, fix the real root cause and explain clearly in your summary).
-2. Apply the minimal fix: ...
-3. Add/update regression test in: ...
+2. Apply the smallest change that fixes the observed behavior and rerun the reproduction.
 
 ## 4. Verification
 Run and ensure all pass:
@@ -30,4 +29,4 @@ Run and ensure all pass:
 ## 5. Required Final Summary Format
 1. **Confirmed Root Cause**: File, line, and mechanism of the defect.
 2. **Fix & Regression Test**: Summary of code changes and test added.
-3. **Verification Results**: Output summary of test runs.
+3. **Verification**: Report the working directory (`pwd -P`), reproduction result, commands run, and any checks skipped or blocked with reasons.

@@ -13,11 +13,10 @@
   - Do NOT run `git commit`, `git push`, `git reset --hard`, or `git checkout --`. Leave all edits unstaged in the working tree for architectural review.
   - Do NOT touch `.codex-tasks/`.
 
-## 3. Architectural Design & Implementation Plan
-<!-- Provide concrete, unambiguous engineering instructions: data models, function/method signatures, algorithms, error handling, and edge cases. -->
-1. **Step 1**: ...
-2. **Step 2**: ...
-3. **Edge Cases & Error Handling**: ...
+## 3. Entry Point & Acceptance Criteria
+- **Entry point**: Where the user or caller exercises this behavior.
+- **Expected result**: A concrete input or scenario and its observable outcome.
+- **Compatibility**: Existing interfaces and behavior that must be preserved.
 
 ## 4. Self-Verification Requirements
 Run the following command(s) inside the workspace before finishing and fix any errors introduced by your changes:
@@ -28,5 +27,5 @@ Run the following command(s) inside the workspace before finishing and fix any e
 ## 5. Required Final Summary Format
 In your final response message, provide a structured report with:
 1. **Changed Files**: List of every created/modified file and a 1-line summary of each change.
-2. **Verification Output**: Exact command(s) run and pass/fail status.
+2. **Verification**: Report the working directory (`pwd -P`), commands run, results, and any checks skipped or blocked with reasons.
 3. **Deviations / Risks**: Any assumptions made or edge cases requiring the architect's attention.

@@ -13,4 +13,5 @@
 Provide a concise, evidence-backed report in your final response containing:
 1. **Direct Answers**: Concrete answers to each research question above.
 2. **Code Citations**: Exact relative file paths, symbol names, and line numbers supporting every finding.
-3. **Risks / Recommendations**: Potential pitfalls, coupling issues, or edge cases discovered.
+3. **Verification**: Report the working directory (`pwd -P`), checks performed, their results, and any questions left unverified with reasons.
+4. **Risks / Recommendations**: Potential pitfalls, coupling issues, or edge cases discovered.
