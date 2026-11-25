@@ -8,7 +8,7 @@
 
 `antigravity-codex-worker` enforces a strict **Architect + Worker + Reviewer** separation using native Antigravity Agent Skills and `codex exec` headless mode:
 
-1. **DEFINE** — Antigravity identifies the entry points, required interfaces, and observable acceptance criteria.
+1. **DEFINE** — Antigravity inspects the codebase and resolves architectural decisions, interfaces, edge cases, and acceptance criteria upfront.
 2. **COMPOSE** — Antigravity writes a structured specification file (`.codex-tasks/<task-id>-spec.md`) from scoped task templates.
 3. **SPAWN** — [scripts/run-codex.zsh](./scripts/run-codex.zsh) pipes the specification via `stdin` into `codex exec --sandbox <mode>` and captures the final report via `--output-last-message`.
 4. **REVIEW** — Antigravity inspects the diff and runs the acceptance checks in the worker's actual checkout. The launcher reports failure if Codex exits unsuccessfully or the final summary is missing or empty.
@@ -30,9 +30,9 @@ Antigravity (Gemini / Opus)           Workspace (.codex-tasks/)           OpenAI
 ### Key Features
 - **macOS-Native `zsh` Launcher**: Resolves `codex` from `PATH`, `/opt/homebrew/bin/codex`, or `/usr/local/bin/codex`, and normalizes file paths before changing directories.
 - **File-Contract `stdin` Handoff**: Specs in `.codex-tasks/<task-id>-spec.md` are streamed via `stdin` to avoid shell quoting and argument-length issues. Templates forbid `git commit`, `git push`, `git reset --hard`, and `git checkout --`, keeping all edits unstaged for review.
-- **Session-ID-Targeted Rework**: Reads `thread_id` from the `thread.started` JSONL event and saves it in `<summary-file>.session-id` for persistent runs. Automatic rework uses this ID and inherits the saved workspace and sandbox. A missing ID disables automatic rework.
+- **Session-ID-Targeted Rework**: Reads `thread_id` from the `thread.started` JSONL event (captured internally without flooding stdout) and saves it in `<summary-file>.session-id` for persistent runs. Automatic rework uses this ID and inherits the saved workspace and sandbox. A missing ID disables automatic rework.
 - **Worktree-Safe Git Hygiene**: Uses `git rev-parse --git-path info/exclude` to register `.codex-tasks/` cleanly across standard repositories, subdirectories, submodules, and `git worktree` checkouts without modifying tracked `.gitignore` files.
-- **Per-Task Execution Controls**: Supports per-invocation overrides for `--model`, `--reasoning-effort`, `--add-dir`, and `--worktree` without mutating `~/.codex/config.toml`. Use `--ephemeral` for one-off tasks.
+- **Per-Task Execution Controls**: Supports per-invocation overrides for `--model`, `--reasoning-effort`, `--add-dir`, and `--worktree` without mutating `~/.codex/config.toml`. Use `--ephemeral` for one-off tasks (skips `--json` and `jq`).
 
 ---
 
@@ -101,6 +101,8 @@ antigravity-codex-worker/
 │   ├── implementation-task.md      # Feature & refactoring specification template
 │   ├── bugfix-task.md              # Root-cause investigation & bugfix template
 │   └── research-task.md            # Read-only audit & exploration template
+├── tests/
+│   └── run-codex.zsh               # Launcher regression test suite
 └── LICENSE                         # MIT License
 ```
 

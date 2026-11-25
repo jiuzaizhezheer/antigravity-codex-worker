@@ -13,10 +13,11 @@
   - Do NOT run `git commit`, `git push`, `git reset --hard`, or `git checkout --`. Leave all edits unstaged in the working tree for architectural review.
   - Do NOT touch `.codex-tasks/`.
 
-## 3. Entry Point & Acceptance Criteria
-- **Entry point**: Where the user or caller exercises this behavior.
-- **Expected result**: A concrete input or scenario and its observable outcome.
-- **Compatibility**: Existing interfaces and behavior that must be preserved.
+## 3. Architectural Design & Implementation Plan
+<!-- Provide concrete, unambiguous engineering instructions: data models, function/method signatures, algorithms, compatibility, edge cases, and acceptance criteria. -->
+1. **Step 1**: ...
+2. **Step 2**: ...
+3. **Compatibility & Acceptance Criteria**: ...
 
 ## 4. Self-Verification Requirements
 Run the following command(s) inside the workspace before finishing and fix any errors introduced by your changes:

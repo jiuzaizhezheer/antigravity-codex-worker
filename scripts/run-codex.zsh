@@ -267,7 +267,10 @@ for img in "${IMAGES[@]}"; do
   ARGS+=("--image" "$img")
 done
 
-ARGS+=("--json" "--output-last-message" "$SUMMARY_FILE")
+if [[ "$EPHEMERAL" -eq 0 ]]; then
+  ARGS+=("--json")
+fi
+ARGS+=("--output-last-message" "$SUMMARY_FILE")
 if [[ -n "$SESSION_ID" ]]; then
   ARGS+=("$SESSION_ID")
 fi
@@ -287,27 +290,40 @@ echo "[CODEX-WORKER] Spec    : $SPEC_FILE"
 echo "[CODEX-WORKER] Summary : $SUMMARY_FILE"
 echo "------------------------------------------------------------"
 
-RUN_LOG="$(mktemp "${TMPDIR:-/tmp}/codex-worker.XXXXXX")"
-trap 'rm -f "$RUN_LOG"' EXIT
-
 exit_code=0
-(
-  cd "${WORK_DIR:-$PWD}" || exit 1
-  "$CODEX_BIN" "${ARGS[@]}" < "$SPEC_FILE"
-) | tee "$RUN_LOG" || {
-  run_status=("${pipestatus[@]}")
-  exit_code=$(( run_status[1] ? run_status[1] : run_status[2] ))
-}
-
-echo "------------------------------------------------------------"
 if [[ "$EPHEMERAL" -eq 0 ]]; then
-  if DETECTED_SESSION_ID="$(jq -ner 'first(inputs | select(.type == "thread.started") | .thread_id | strings | select(length > 0))' "$RUN_LOG")"; then
+  RUN_LOG="$(mktemp "${TMPDIR:-/tmp}/codex-worker.XXXXXX")"
+  trap 'rm -f "$RUN_LOG"' EXIT
+
+  (
+    cd "${WORK_DIR:-$PWD}" || exit 1
+    "$CODEX_BIN" "${ARGS[@]}" < "$SPEC_FILE"
+  ) > "$RUN_LOG" || exit_code=$?
+
+  echo "------------------------------------------------------------"
+  if DETECTED_SESSION_ID="$(jq -ner 'first(inputs | select(.type == "thread.started") | .thread_id | strings | select(length > 0))' "$RUN_LOG" 2>/dev/null)"; then
     print -r -- "$DETECTED_SESSION_ID" > "$SESSION_FILE"
     echo "[CODEX-WORKER] Session : $DETECTED_SESSION_ID"
   else
     echo "[CODEX-WORKER] No session ID received. Automatic rework is unavailable." >&2
   fi
+
+  if [[ "$exit_code" -ne 0 && -s "$RUN_LOG" ]]; then
+    ERROR_LINES="$(jq -Rr 'fromjson? | select(.type == "error" or .type == "turn.failed") | .message // .error.message // empty' "$RUN_LOG" 2>/dev/null || true)"
+    if [[ -n "$ERROR_LINES" ]]; then
+      print -r -- "$ERROR_LINES" >&2
+    else
+      tail -n 20 "$RUN_LOG" >&2
+    fi
+  fi
+else
+  (
+    cd "${WORK_DIR:-$PWD}" || exit 1
+    "$CODEX_BIN" "${ARGS[@]}" < "$SPEC_FILE"
+  ) || exit_code=$?
+  echo "------------------------------------------------------------"
 fi
+
 if [[ "$exit_code" -ne 0 ]]; then
   echo "[CODEX-WORKER] Run failed with exit code: $exit_code" >&2
   exit "$exit_code"

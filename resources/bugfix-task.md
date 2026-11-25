@@ -18,7 +18,8 @@
 
 ## 3. Fix Plan
 1. Confirm the root cause in code (if the actual root cause differs from the hypothesis above, fix the real root cause and explain clearly in your summary).
-2. Apply the smallest change that fixes the observed behavior and rerun the reproduction.
+2. Apply the minimal fix and rerun the reproduction: ...
+3. Add/update regression test in: ...
 
 ## 4. Verification
 Run and ensure all pass:

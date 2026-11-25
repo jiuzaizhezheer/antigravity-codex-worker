@@ -15,10 +15,19 @@ cat > bin/codex <<'EOF'
 set -eu
 print -rl -- "$@" > "$ARGS_FILE"
 [[ $(cat) == 'Task with spaces' ]]
-print -u2 -- '{"type":"thread.started","thread_id":"stderr-id"}'
-print -r -- '{"type":"item.completed","item":{"text":"session id: message-id"}}'
-if [[ ${MOCK_REPLY:-} != no-id ]]; then
-  print -r -- '{"type":"thread.started","thread_id":"worker-id"}'
+if [[ ${MOCK_STDOUT:-jsonl} == bad-json ]]; then
+  print -r -- 'not-valid-json'
+elif [[ ${MOCK_STDOUT:-jsonl} == ephemeral ]]; then
+  print -r -- 'Ephemeral human output'
+else
+  print -u2 -- '{"type":"thread.started","thread_id":"stderr-id"}'
+  print -r -- '{"type":"item.completed","item":{"text":"session id: message-id"}}'
+  if [[ ${MOCK_REPLY:-} != no-id ]]; then
+    print -r -- '{"type":"thread.started","thread_id":"worker-id"}'
+  fi
+  if [[ ${MOCK_EXIT:-0} -ne 0 ]]; then
+    print -r -- '{"type":"error","message":"boom"}'
+  fi
 fi
 while [[ "$1" != --output-last-message ]]; do shift; done
 case ${MOCK_REPLY:-ok} in
@@ -49,35 +58,50 @@ expect_args() {
 checkout="${PWD:A}/worker checkout"
 output="${PWD:A}/summary.md"
 common=(exec --color never)
-report=(--json --output-last-message "$output")
+report_json=(--json --output-last-message "$output")
+report_plain=(--output-last-message "$output")
 
 run_worker 0
-expect_args "${common[@]}" --cd "${PWD:A}" --sandbox workspace-write "${report[@]}" -
+expect_args "${common[@]}" --cd "${PWD:A}" --sandbox workspace-write "${report_json[@]}" -
 [[ $(<summary.md.session-id) == worker-id && $(<summary.md) == 'Worker summary' ]]
+if grep -qE '"type":"item\.completed"|"thread_id":"worker-id"' run.log; then
+  print -u2 -- "Raw JSONL leaked into stdout for persistent run"
+  exit 1
+fi
 
 run_worker 0 --work-dir "$checkout" --sandbox read-only --worktree
-expect_args "${common[@]}" --cd "$checkout" --sandbox read-only --worktree "${report[@]}" -
+expect_args "${common[@]}" --cd "$checkout" --sandbox read-only --worktree "${report_json[@]}" -
 git -C "$checkout" check-ignore -q .codex-tasks/spec.md
 read -r saved_id < summary.md.session-id
 run_worker 0 --session-id "$saved_id"
-expect_args "${common[@]}" resume "${report[@]}" worker-id -
+expect_args "${common[@]}" resume "${report_json[@]}" worker-id -
 run_worker 0 --session-id worker-id --work-dir "$checkout" --sandbox read-only
-expect_args "${common[@]}" --cd "$checkout" --sandbox read-only resume "${report[@]}" worker-id -
+expect_args "${common[@]}" --cd "$checkout" --sandbox read-only resume "${report_json[@]}" worker-id -
 run_worker 0 --resume-last
-expect_args "${common[@]}" resume --last "${report[@]}" -
+expect_args "${common[@]}" resume --last "${report_json[@]}" -
 
-run_worker 0 --sandbox read-only --ephemeral
-expect_args "${common[@]}" --cd "${PWD:A}" --sandbox read-only --ephemeral "${report[@]}" -
+MOCK_STDOUT=ephemeral run_worker 0 --sandbox read-only --ephemeral
+expect_args "${common[@]}" --cd "${PWD:A}" --sandbox read-only --ephemeral "${report_plain[@]}" -
 [[ ! -e summary.md.session-id ]]
+grep -qF 'Ephemeral human output' run.log
+
 run_worker 0
 MOCK_REPLY=no-id run_worker 0
 [[ ! -e summary.md.session-id ]]
+
+MOCK_STDOUT=bad-json run_worker 0
+[[ ! -e summary.md.session-id ]]
+if grep -qF 'jq: parse error' run.log; then
+  print -u2 -- "jq parse error leaked to output"
+  exit 1
+fi
 
 MOCK_REPLY=missing run_worker 1
 MOCK_REPLY=empty run_worker 1
 MOCK_REPLY=blank run_worker 1
 MOCK_EXIT=42 run_worker 42
 [[ $(<summary.md.session-id) == worker-id ]]
+grep -qF 'boom' run.log
 
 print -r -- untouched > "$ARGS_FILE"
 run_worker 2 --worktree --ephemeral

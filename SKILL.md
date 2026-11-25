@@ -33,7 +33,7 @@ When this skill is active, operate strictly in an **Architect + Worker + Reviewe
 
 ### Stage 1: DEFINE (Research & Architecture)
 1. Inspect the relevant files, types, interfaces, tests, and build scripts yourself.
-2. Specify the observable outcome, entry points, compatibility requirements, and acceptance checks. Record any mandated design decisions. Let Codex choose implementation details using the target project's conventions.
+2. Make all architectural and design decisions upfront (data structures, function/method signatures, file layout, edge cases, and acceptance criteria). Do not leave architectural ambiguity for Codex to guess.
 3. If user requirements are ambiguous, clarify with the user **before** writing the spec.
 
 ### Stage 2: COMPOSE (Write Task Specification)
@@ -78,7 +78,7 @@ Optional flags supported by `run-codex.zsh`:
    - Run all review commands and tests in the worker's checkout. For `--worktree`, match the directory reported by the worker to an entry in `git worktree list --porcelain` before reviewing the diff.
    - Run `git status --short` (check for untracked files or unexpected deletions, accounting for any Pre-Flight baseline changes).
    - Run `git diff` (and read new untracked files with `read_file`) to review every changed line against your Stage 2 spec:
-     - Does the change satisfy the acceptance criteria and preserve the required interfaces?
+     - Did Codex follow the specified architecture, interfaces, and acceptance criteria?
      - Did it touch any forbidden files?
      - Are error handling, types, security, and edge cases properly handled?
 3. **Run Independent Verification**: Run the project's test suite, typechecker, or linter yourself to confirm everything passes cleanly.
