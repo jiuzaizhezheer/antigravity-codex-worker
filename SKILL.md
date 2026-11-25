@@ -76,7 +76,7 @@ zsh "<skill-dir>/scripts/run-codex.zsh" --work-dir "<workspace-abs-path>" --spec
 ```
 
 Key flag rules (run `--help` for all options such as `--model`, `--reasoning-effort`, `--add-dir`, `--image`, `--skip-git-check`):
-- Omit `--model` and `--reasoning-effort` unless the user specifies them (uses `~/.codex/config.toml` defaults).
+- `run-codex.zsh` defaults to `--model gpt-6.2-astra` and `--reasoning-effort xhigh`; omit both flags unless the user specifies a different model or effort level.
 - `--session-id "<id>"` inherits the original task's saved working directory and sandbox; omit `--work-dir`, `--sandbox`, and `--worktree` on resume unless intentionally overriding dir/sandbox.
 - `--worktree` requires a new persistent session (cannot combine with `--ephemeral`, `--session-id`, or `--resume-last`).
 

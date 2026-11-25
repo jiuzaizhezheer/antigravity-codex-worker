@@ -100,8 +100,8 @@ In Antigravity App or CLI, invoke explicitly with `/codex-worker` or prompt natu
 | `--summary-file <path>` | **Required.** Output file path passed to `--output-last-message` (`-o`). |
 | `--work-dir <dir>` | Defaults to the current directory for new runs and the saved directory on resume. |
 | `--sandbox <mode>` | `read-only`, `workspace-write`, or `danger-full-access`. Defaults to `workspace-write` for new runs and the saved policy on resume. |
-| `--model <slug>` | Override the Codex model for this invocation. |
-| `--reasoning-effort <level>` | Override `model_reasoning_effort`: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. |
+| `--model <slug>` | Codex model for this invocation (default: `gpt-6.2-astra`). |
+| `--reasoning-effort <level>` | `model_reasoning_effort`: `minimal`, `low`, `medium`, `high`, `xhigh` (default), `max`, or `ultra`. |
 | `--session-id <id>` | Resume a specific Codex session by ID (mutually exclusive with `--resume-last`). |
 | `--resume-last` | Resume the most recent Codex session recorded for `--work-dir`. |
 | `--add-dir <dir>` | Grant writable access to an additional directory alongside `--work-dir` (repeatable). |

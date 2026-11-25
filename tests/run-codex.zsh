@@ -85,19 +85,23 @@ expect_args() {
 checkout="${PWD:A}/worker checkout"
 output="${PWD:A}/summary.md"
 common=(exec --color never)
+defaults=(--model gpt-6.2-astra -c 'model_reasoning_effort="xhigh"')
 report_json=(--json --output-last-message "$output")
 report_plain=(--output-last-message "$output")
 
 run_worker 0
-expect_args "${common[@]}" --cd "${PWD:A}" --sandbox workspace-write "${report_json[@]}" -
+expect_args "${common[@]}" --cd "${PWD:A}" --sandbox workspace-write "${defaults[@]}" "${report_json[@]}" -
 [[ $(<summary.md.session-id) == worker-id && $(<summary.md) == 'Worker summary' ]]
 if grep -qE '"type":"item\.completed"|"thread_id":"worker-id"' run.log; then
   print -u2 -- "Raw JSONL leaked into stdout for persistent run"
   exit 1
 fi
 
+run_worker 0 --model custom-model --reasoning-effort low
+expect_args "${common[@]}" --cd "${PWD:A}" --sandbox workspace-write --model custom-model -c 'model_reasoning_effort="low"' "${report_json[@]}" -
+
 MOCK_WT_TAG=single run_worker 0 --work-dir "$checkout" --sandbox read-only --worktree
-expect_args "${common[@]}" --cd "$checkout" --sandbox read-only --worktree "${report_json[@]}" -
+expect_args "${common[@]}" --cd "$checkout" --sandbox read-only --worktree "${defaults[@]}" "${report_json[@]}" -
 git -C "$checkout" check-ignore -q .codex-tasks/spec.md
 expected_wt="${PWD:A}/wt checkout single-1"
 [[ $(<summary.md.worktree) == "$expected_wt" ]]
@@ -105,19 +109,19 @@ grep -qF "[CODEX-WORKER] Worktree : $expected_wt" run.log
 
 read -r saved_id < summary.md.session-id
 run_worker 0 --session-id "$saved_id"
-expect_args "${common[@]}" resume "${report_json[@]}" worker-id -
+expect_args "${common[@]}" resume "${defaults[@]}" "${report_json[@]}" worker-id -
 [[ ! -e summary.md.worktree ]]
 run_worker 0 --session-id worker-id --work-dir "$checkout" --sandbox read-only
-expect_args "${common[@]}" --cd "$checkout" --sandbox read-only resume "${report_json[@]}" worker-id -
+expect_args "${common[@]}" --cd "$checkout" --sandbox read-only resume "${defaults[@]}" "${report_json[@]}" worker-id -
 run_worker 0 --resume-last
-expect_args "${common[@]}" resume --last "${report_json[@]}" -
+expect_args "${common[@]}" resume --last "${defaults[@]}" "${report_json[@]}" -
 
 MOCK_WT_TAG=multi MOCK_WORKTREE_COUNT=2 run_worker 0 --work-dir "$checkout" --sandbox workspace-write --worktree
 [[ ! -e summary.md.worktree ]]
 grep -qF "Multiple new worktrees detected" run.log
 
 MOCK_STDOUT=ephemeral run_worker 0 --sandbox read-only --ephemeral
-expect_args "${common[@]}" --cd "${PWD:A}" --sandbox read-only --ephemeral "${report_plain[@]}" -
+expect_args "${common[@]}" --cd "${PWD:A}" --sandbox read-only --ephemeral "${defaults[@]}" "${report_plain[@]}" -
 [[ ! -e summary.md.session-id && ! -e summary.md.worktree ]]
 grep -qF 'Ephemeral human output' run.log
 

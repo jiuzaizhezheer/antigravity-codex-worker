@@ -13,8 +13,9 @@ Options:
   --work-dir <dir>            Workspace directory (new run: current; resume: saved)
   --sandbox <mode>            read-only | workspace-write | danger-full-access
                               (new run: workspace-write; resume: saved)
-  --model <slug>              Override Codex model for this run
+  --model <slug>              Codex model for this run (default: gpt-6.2-astra)
   --reasoning-effort <level>  minimal | low | medium | high | xhigh | max | ultra
+                              (default: xhigh)
   --session-id <id>           Resume a specific Codex session by ID
   --resume-last               Resume the most recent Codex session in --work-dir
   --skip-git-check            Allow running outside a Git repository
@@ -37,8 +38,8 @@ SPEC_FILE=""
 SUMMARY_FILE=""
 WORK_DIR=""
 SANDBOX=""
-MODEL=""
-REASONING_EFFORT=""
+MODEL="gpt-6.2-astra"
+REASONING_EFFORT="xhigh"
 SESSION_ID=""
 RESUME_LAST=0
 SKIP_GIT_CHECK=0
