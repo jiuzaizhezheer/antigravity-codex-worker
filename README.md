@@ -93,6 +93,7 @@ Start a conversation in Antigravity and prompt naturally:
 ## Repository Structure
 ```text
 antigravity-codex-worker/
+├── AGENTS.md                       # Repository-level rules for self-iteration
 ├── SKILL.md                        # Orchestration rules & 5-stage review protocol
 ├── scripts/
 │   └── run-codex.zsh               # macOS zsh headless launcher
