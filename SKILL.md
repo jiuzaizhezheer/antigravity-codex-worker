@@ -1,11 +1,11 @@
 ---
 name: codex-worker
 description: >-
-  Orchestrate local OpenAI Codex CLI (`codex exec`) as a sandboxed coding worker while you act as Architect and Code Reviewer.
-  Activate this skill whenever the user asks to design a plan/spec and delegate coding, refactoring, bug fixing, or secondary codebase research to Codex CLI / GPT CLI (e.g., "让 Codex 写代码", "设计方案派发给 Codex/GPT", "用架构师+Codex 模式", "delegate implementation to Codex").
+  Orchestrate local OpenAI Codex CLI (`codex exec`) on macOS as a sandboxed coding worker while you act as Architect and Code Reviewer.
+  Activate this skill whenever the user asks to design a plan/spec and delegate coding, refactoring, bug fixing, or secondary codebase research to Codex CLI / GPT CLI (e.g., "delegate implementation to Codex", "design a spec and hand off coding to Codex CLI", "use architect + Codex worker mode", "run a read-only audit with Codex").
 ---
 
-# Codex Worker Orchestration & Review Skill
+# Codex Worker Orchestration & Review Skill (macOS)
 
 When this skill is active, operate strictly in an **Architect + Worker + Reviewer** split:
 
@@ -19,13 +19,13 @@ When this skill is active, operate strictly in an **Architect + Worker + Reviewe
 
 `codex exec` requires a Git repository by default, and `git diff` is essential for your review gate. Before dispatching a task in a workspace:
 
-1. Run `git rev-parse --is-inside-work-tree` (sandboxed) in the workspace.
+1. Run `git rev-parse --is-inside-work-tree` in the workspace.
 2. **If already a Git repo**:
-   - Check `git status --short` so you know if there are pre-existing uncommitted changes before Codex starts.
-   - Note: `run-codex.ps1` / `run-codex.sh` automatically adds `.codex-tasks/` to `.git/info/exclude` so task files never pollute `git status` or the project's committed `.gitignore`.
+   - Check `git status --short` and record any pre-existing uncommitted changes before Codex starts so you can separate them during Stage 4 review (or pass `--worktree` if the working tree is dirty and you want isolated changes).
+   - Note: `run-codex.zsh` automatically adds `.codex-tasks/` to Git's `info/exclude` (including worktrees and submodules) so task files never pollute `git status` or the project's committed `.gitignore`.
    - Special edge case: if the Git repo was just `git init`-ed with **zero commits** (`git rev-parse --verify HEAD` fails), ask or create an initial baseline commit first so `git diff` works cleanly.
 3. **If NOT a Git repo**:
-   - Ask the user whether to initialize local Git first (`git init -b main`, `git add .`, `git commit -m "chore: initial baseline"` — **recommended**), or pass `-SkipGitCheck` / `--skip-git-check` if they explicitly prefer running without Git.
+   - Ask the user whether to initialize local Git first (`git init -b main`, `git add .`, `git commit -m "chore: initial baseline"` — **recommended**), or pass `--skip-git-check` if they explicitly prefer running without Git.
 
 ---
 
@@ -45,40 +45,37 @@ When this skill is active, operate strictly in an **Architect + Worker + Reviewe
 3. Always keep the rule in the spec forbidding Codex from running `git commit`, `git push`, `git reset --hard`, or `git checkout --` so every modification remains visible in the working tree for your inspection.
 
 ### Stage 3: SPAWN (Dispatch to Local Codex CLI)
-Resolve `<skill-dir>` as the directory containing this `SKILL.md` file, then invoke the launcher matching the host OS:
-- **Windows (`pwsh`)**: [run-codex.ps1](./scripts/run-codex.ps1)
-- **macOS / Linux (`bash`)**: [run-codex.sh](./scripts/run-codex.sh)
+Resolve `<skill-dir>` as the directory containing this `SKILL.md` file, then invoke [run-codex.zsh](./scripts/run-codex.zsh):
 
-- **Execution Rule**: Because `codex` reads authentication from `~/.codex` and connects to the OpenAI API over the network, set `WaitMsBeforeAsync: 10000` when calling `run_command` (and if your `run_command` tool schema exposes a `BypassSandbox` parameter, set `BypassSandbox: true` ONLY on this dispatch command while keeping your own inspection/review commands sandboxed).
+- **Execution Rule**: Set `WaitMsBeforeAsync: 10000` when calling `run_command`.
 - **Async Handling**: Coding tasks often take 30–180 seconds. If the command moves to background after 10 seconds, **stop calling tools and wait** — the system automatically wakes you when the background task finishes. Never poll in a loop.
 - **Command Shape** (resolve `<skill-dir>` and `<workspace-abs-path>` to concrete literal paths — avoid `$(...)` or shell variables so user approval prefix-matches cleanly):
 
-```powershell
-# Windows (PowerShell) — Implementation or Bugfix:
-pwsh -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>/scripts/run-codex.ps1" -WorkDir "<workspace-abs-path>" -SpecFile "<workspace-abs-path>/.codex-tasks/<task-id>-spec.md" -SummaryFile "<workspace-abs-path>/.codex-tasks/<task-id>-summary.md" -Sandbox workspace-write
+```zsh
+# Implementation or Bugfix:
+zsh "<skill-dir>/scripts/run-codex.zsh" --work-dir "<workspace-abs-path>" --spec-file "<workspace-abs-path>/.codex-tasks/<task-id>-spec.md" --summary-file "<workspace-abs-path>/.codex-tasks/<task-id>-summary.md" --sandbox workspace-write
 
-# Windows (PowerShell) — Read-only Research / Audit:
-pwsh -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>/scripts/run-codex.ps1" -WorkDir "<workspace-abs-path>" -SpecFile "<workspace-abs-path>/.codex-tasks/<task-id>-spec.md" -SummaryFile "<workspace-abs-path>/.codex-tasks/<task-id>-summary.md" -Sandbox read-only
+# Read-only Research / Audit (automatically enables --ephemeral):
+zsh "<skill-dir>/scripts/run-codex.zsh" --work-dir "<workspace-abs-path>" --spec-file "<workspace-abs-path>/.codex-tasks/<task-id>-spec.md" --summary-file "<workspace-abs-path>/.codex-tasks/<task-id>-summary.md" --sandbox read-only
 ```
 
-```bash
-# macOS / Linux (Bash):
-bash "<skill-dir>/scripts/run-codex.sh" --work-dir "<workspace-abs-path>" --spec-file "<workspace-abs-path>/.codex-tasks/<task-id>-spec.md" --summary-file "<workspace-abs-path>/.codex-tasks/<task-id>-summary.md" --sandbox workspace-write
-```
-
-Optional flags supported by `run-codex.ps1` (and `--kebab-case` equivalents in `run-codex.sh`):
-- `-Model "<model-slug>"` (`--model`): Overrides Codex's default model for this run. Only set when the user asks for a specific model; omit otherwise to use `~/.codex/config.toml` default.
-- `-ReasoningEffort "<level>"` (`--reasoning-effort`): Overrides Codex's thinking effort (`minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`) via `-c model_reasoning_effort=...`. Set when the user requests a specific thinking intensity; omit otherwise to use `~/.codex/config.toml` default.
-- `-ResumeLast` (`--resume-last`): Resumes the most recent Codex session in `-WorkDir` (use for Stage 5 rework).
-- `-SkipGitCheck` (`--skip-git-check`): Allows execution outside a Git repository when explicitly requested.
-- `-Image "<file-path>"` (`--image`): Attaches reference screenshot/mockup file(s) to the prompt.
+Optional flags supported by `run-codex.zsh`:
+- `--model "<model-slug>"`: Overrides Codex's default model for this run. Only set when the user asks for a specific model; omit otherwise to use `~/.codex/config.toml` default.
+- `--reasoning-effort "<level>"`: Overrides Codex's thinking effort (`minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`) via `-c model_reasoning_effort=...`. Set when the user requests a specific thinking intensity; omit otherwise to use `~/.codex/config.toml` default.
+- `--session-id "<id>"`: Resumes a specific Codex session by ID (preferred for Stage 5 rework using the `[CODEX-WORKER] Session : <id>` line printed in Stage 3).
+- `--resume-last`: Resumes the most recent Codex session in `--work-dir` (fallback if no session ID was captured; do not combine with `--session-id`).
+- `--add-dir "<dir>"`: Grants writable access to an additional directory alongside `--work-dir` (repeatable).
+- `--worktree`: Runs Codex in a new managed Git worktree (useful when `--work-dir` has pre-existing uncommitted edits).
+- `--ephemeral`: Runs without persisting session files to disk (automatically enabled when `--sandbox read-only` is used without `--session-id`/`--resume-last`).
+- `--skip-git-check`: Allows execution outside a Git repository when explicitly requested.
+- `--image "<file-path>"`: Attaches reference screenshot/mockup file(s) to the prompt (repeatable).
 
 ### Stage 4: REVIEW (Strict Independent Acceptance)
-**Never trust Codex's summary at face value.** Perform all three checks yourself (in Standard Sandbox Mode):
+**Never trust Codex's summary at face value.** Perform all three checks yourself:
 
 1. **Read Worker Summary**: Read `<workspace>/.codex-tasks/<task-id>-summary.md` to understand Codex's claimed changes, test runs, and caveats.
 2. **Inspect Actual Diffs**:
-   - Run `git status --short` (check for untracked files or unexpected deletions).
+   - Run `git status --short` (check for untracked files or unexpected deletions, accounting for any Pre-Flight baseline changes).
    - Run `git diff` (and read new untracked files with `read_file`) to review every changed line against your Stage 2 spec:
      - Did Codex follow the exact architecture and interfaces?
      - Did it touch any forbidden files?
@@ -88,7 +85,7 @@ Optional flags supported by `run-codex.ps1` (and `--kebab-case` equivalents in `
 ### Stage 5: VERDICT (Approve or Rework)
 - **If Review Fails**:
   1. Write concrete, actionable feedback (exact file paths, line numbers, design deviations, or compiler/test error output) to `<workspace>/.codex-tasks/<task-id>-rework-1.md`.
-  2. Dispatch rework by re-running the launcher with `-ResumeLast` (`--resume-last`), pointing `-SpecFile` to the rework file and `-SummaryFile` to `<task-id>-rework-1-summary.md`.
+  2. Dispatch rework by re-running `run-codex.zsh` with `--session-id "<id>"` (from `[CODEX-WORKER] Session : <id>` in Stage 3 output, or `--resume-last` as fallback if no session ID was printed), pointing `--spec-file` to the rework file and `--summary-file` to `<task-id>-rework-1-summary.md`.
   3. Repeat Stage 4 review. Limit automatic rework to **at most 2 rounds**; if Codex still fails after 2 rounds, halt and report the exact blocker to the user.
 - **If Review Passes**:
   Report concisely to the user:
